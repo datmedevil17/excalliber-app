@@ -1,5 +1,4 @@
-import { BIGTREE_B64 }     from './bigTreeData';
-import { ZOMBIEBASIC_B64 } from './zombiebasicData';
+import { BIGTREE_B64 } from './bigTreeData';
 
 export function buildSimpleSurvivalHTML(characterB64: string, weaponBone: string = 'AK'): string {
   return `<!DOCTYPE html>
@@ -36,13 +35,11 @@ export function buildSimpleSurvivalHTML(characterB64: string, weaponBone: string
   </script>
 
   <script type="module">
-    import * as THREE        from 'three';
-    import { GLTFLoader }    from 'three/addons/loaders/GLTFLoader.js';
-    import { SkeletonUtils } from 'three/addons/utils/SkeletonUtils.js';
+    import * as THREE     from 'three';
+    import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
     const CHAR_B64    = '${characterB64}';
     const TREE_B64    = '${BIGTREE_B64}';
-    const ZOMBIE_B64  = '${ZOMBIEBASIC_B64}';
     const WEAPON_BONE = '${weaponBone}';
     const ALL_WEAPONS = ['AK','GrenadeLauncher','Knife_1','Knife_2','Pistol','Revolver','Revolver_Small','RocketLauncher','ShortCannon','Shotgun','Shovel','SMG','Sniper','Sniper_2'];
 
@@ -103,7 +100,7 @@ export function buildSimpleSurvivalHTML(characterB64: string, weaponBone: string
     ground.receiveShadow = true;
     scene.add(ground);
 
-    /* tree positions */
+    /* tree positions — scattered, min 8 units from origin, min 12 apart */
     const treePts = [];
     let attempts = 0;
     while(treePts.length < 30 && attempts < 1200){
@@ -167,30 +164,13 @@ export function buildSimpleSurvivalHTML(characterB64: string, weaponBone: string
       return buf.buffer;
     }
 
-    /* zombie (added lazily after game loop starts) */
-    let zMixer=null;
-    function loadZombie(){
-      new GLTFLoader().parse(b64Buf(ZOMBIE_B64),'',gltf=>{
-        const mesh=SkeletonUtils.clone(gltf.scene);
-        mesh.traverse(c=>{ if(c.isMesh){c.castShadow=true;c.receiveShadow=true;} });
-        mesh.position.set(6,0,0);
-        scene.add(mesh);
-        zMixer=new THREE.AnimationMixer(mesh);
-        const clip=THREE.AnimationClip.findByName(gltf.animations,'Idle');
-        if(clip) zMixer.clipAction(clip).play();
-      },err=>console.error('zombie',err));
-    }
-
-    /* load char + tree — these two gate the loading screen */
+    /* loading — wait for both char + tree */
     let loaded=0;
     function onLoaded(){
       if(++loaded<2) return;
       const el=document.getElementById('loading');
-      el.style.opacity='0';
-      setTimeout(()=>el.style.display='none',500);
+      el.style.opacity='0'; setTimeout(()=>el.style.display='none',500);
       loop();
-      /* spawn zombie after rendering has settled */
-      setTimeout(loadZombie, 2000);
     }
 
     new GLTFLoader().parse(b64Buf(CHAR_B64),'',gltf=>{
@@ -232,6 +212,7 @@ export function buildSimpleSurvivalHTML(characterB64: string, weaponBone: string
         let nx=pPos.x+joyDx*speed*dt;
         let nz=pPos.z+joyDy*speed*dt;
 
+        /* tree collision push */
         for(const [tx,tz] of treePts){
           const dx=nx-tx, dz=nz-tz, d2=dx*dx+dz*dz;
           if(d2>0 && d2<PUSH_DIST*PUSH_DIST){
@@ -254,8 +235,6 @@ export function buildSimpleSurvivalHTML(characterB64: string, weaponBone: string
         camera.position.set(pPos.x, pPos.y+12, pPos.z+10);
         camera.lookAt(pPos.x, pPos.y+1, pPos.z);
       }
-
-      if(zMixer) zMixer.update(dt);
 
       renderer.render(scene,camera);
     }
